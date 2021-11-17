@@ -1,0 +1,260 @@
+---
+title: "Analysis of while-alive event rate for recurrent hospitalization"
+author: Lu Mao
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Analysis of while-alive event rate for recurrent hospitalization}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+  \usepackage{amsmath}
+---
+
+```{r, echo = FALSE, message = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## INTRODUCTION
+This vignette demonstrates the use of the R-package `WA` 
+in the analysis of while-alive loss (or event) rate
+for recurrent event, e.g., hospitalization, in the presence of death (Mao, 2022).
+
+### Data
+Let $D$ denote the survival time and write $N_D(t)=I(D\leq t)$.
+Let $N(t)$ count the number of recurrent nonfatal event 
+by time $t$. Since death is a terminal event,
+we must have that $N(t)=N(t\wedge D)$,
+where $b\wedge c=\min(b,c)$.
+Let $\mathcal H(t)=\{N_D(u), N(u):0\leq u\leq t\}$ denote
+the event history up to time $t$.
+
+### Estimands
+Let $\mathcal L(\mathcal H)({\rm d}t)$ be a user-specified loss function 
+that measures the instantaneous loss incurred at time $t$. 
+We focus on loss functions of the form
+\begin{equation}\tag{1}
+\mathcal L(\mathcal H)({\rm d} t)=w_{N(t-)}{\rm d}N(t)+w^D_{N(t-)}{\rm d}N_D(t),
+\end{equation}
+where $w_m(t)$ and $w^D_m(t)$ are weights attached to an incident (i.e., new)
+nonfatal event or death, respectively, when the patient has already experienced
+$m$ nonfatal events. This scheme allows the user to assign weights 
+according not only to the type and timing of the incident event but also to past history. 
+It can be useful, for example, if we want to make
+ the loss metric more robust to patients who experience unusually large 
+numbers of event. In that case, we can specify a $w_m(t)$ that decays with larger $m$.
+
+
+The cumulative loss is then defined by $\mathcal L(\mathcal H)(t)=\int_0^t L(\mathcal H)({\rm d}u)$.
+ With $w_m(t)\equiv w$ and $w_m^D(t)\equiv w^D$, 
+ for example, the cumulative loss becomes $\mathcal L(\mathcal H)(t)=wN(t)+w^DN_D(t)$, same as the weighted composite event process 
+ considered by Mao and Lin (2016).
+
+Let $\mathcal H^{(a)}$ denote the outcome data from group $a$
+($a=1, 2,\ldots, J-1$ for different treatments and $a=0$ for the control).
+To characterize the loss profile over $[0,\tau]$ in the presence of death,
+define the while-alive loss rate by
+\begin{equation}\tag{2}
+l^{(a)}(\tau)=\frac{E\{\mathcal L(\mathcal H^{(a)})(\tau)\}}{E(D^{(a)}\wedge\tau)}.
+\end{equation}
+The numerator on the right hand side of (2) is 
+the mean cumulative loss, akin to the mean cumulative
+frequency studied by Ghosh and Lin (2000),
+and the denominator
+is the restricted mean survival time (RMST; Royston & Parmar, 2011),
+the latter of which accounts for the length of exposure. We can interpret $l^{(a)}(\tau)$ as the 
+average loss experienced per unit time alive in group $a$ over $[0, \tau]$.
+Using the loss function defined in (1) with $w_m(t)\equiv 1$ and $w_m^D(t)\equiv 0$
+reduces (2) to $l^{(a)}(\tau)=E\{N(\tau)\}/E(D^{(a)}\wedge t)$,
+the while-alive event rate for the recurrent event considered by Schmidli et al. (2021)
+and Wei et al. (2021).
+The *survival-completed* cumulative loss is defined by
+$L^{(a)}(\tau)=l^{(a)}(\tau)\tau$, which can be considered roughly as the total
+loss over $[0,\tau]$ without being curtailed by death.
+
+
+We can measure the effect size of treatment $a$ as compared to the control 
+by the loss rate ratio:
+\begin{equation}\tag{3}
+r^{(a)}(\tau)=l^{(a)}(\tau)/l^{(0)}(\tau).
+\end{equation}
+That is, patients under treatment $a$ on average experience
+$r^{(a)}(\tau)$ times as much loss (or as many events)
+per unit time alive as compared to the control by time $\tau$.
+
+
+### Tests
+
+Testing the equality of loss rate across the $J$ groups, i.e.,
+\begin{equation}\tag{4}
+H_0: l^{(0)}(\tau)=l^{(1)}(\tau)=\cdots=l^{(J-1)}(\tau),
+\end{equation}
+is equivalent to testing $\{\log r^{(1)}(\tau),\ldots,\log r^{(J-1)}(\tau)\}^{\rm T}=\bf 0$,
+which can be done via a Wald-type chi-square test with $(J-1)$ degrees of freedom (df).
+Similarly, we can test 
+the loss rate jointly with the RMST, i.e.,
+\begin{equation}\tag{5}
+H_0: l^{(0)}(\tau)=l^{(1)}(\tau)=\cdots=l^{(J-1)}(\tau)
+\mbox{ and }\mu_D^{(0)}(\tau)=\mu_D^{(1)}(\tau)=\cdots=\mu_D^{(J-1)}(\tau),
+\end{equation}
+where $\mu_D^{(a)}(\tau)=E(D^{(a)}\wedge\tau)$,
+by a Wald-type chi-square test with $2(J-1)$ df.
+The $2(J-1)$ df test will be useful if $\mathcal L$ captures only
+recurrent event (e.g., when $w_m^D(t)\equiv 0$ in (1)) 
+so that (5) becomes a joint test of recurrent event and death. 
+
+
+
+## BASIC SYNTAX
+
+### Data fitting and summarization
+The main function to fit the data is `LRfit()`. To use the function, the input data must be 
+in the "long" format. Specifically, we need an `id` variable containing
+the unique patient identifiers,  a `time` variable containing the event times,
+a `status` variable labeling the event type (`status=1` for recurrent non-fatal
+event, `=2` for death, and `=0` for censoring),
+and, finally, a *categorical* (either binary or multiclass) `trt` variable for the treatment arm.
+To analyze the (unweighted) recurrent event rate,
+i.e., $w_m(t)\equiv 1$ and $w_m^D(t)\equiv 0$ in (1), simply run the function in
+the default mode
+```{r,eval=F}
+obj<-LRfit(id,time,status,trt)
+```
+Alternatively, we can add the `Dweight` argument to specify a non-zero (constant) $w^D$
+for death. Even more generally, we can supply self-defined $w_m(t)$ and $w_m^D(t)$
+through the functional arguments `wH` and `wD`, respectively.
+For example, the above code for the unweighted event rate is equivalent to
+```{r,eval=F}
+obj<-LRfit(id,time,status,trt,Dweight=0)
+```
+and to
+```{r,eval=F}
+# define w_m(t)
+wH<-function(t,m) return (1)
+# define w_m^D(t)
+wD<-function(t,m) return (0)
+obj<-LRfit(id,time,status,trt,wH=wH,wD=wD)
+```
+
+
+The returned object `obj` contains all information about the group-specific loss rate
+and their standard errors. 
+To extract relevant information for a particular $\tau=$`tau`, use
+```{r,eval=F}
+summary(obj,tau)
+```
+This will print out the inference results on the loss rate ratio defined in (3)
+comparing each group to the reference group (which can be 
+specified through the optional `ref=` argument 
+if you want to override the default) 
+as well as the $(J-1)$-df overall test of (4).
+To request the $2(J-1)$-df loss-rate/RMST joint test of (5),
+add the option `joint.test=T` to the `summary()` function.
+
+### Plot of $L(\cdot)$
+To plot the estimated survival-completed cumulative loss 
+$L^{(a)}(\tau)$ as a function of $\tau$, use 
+```{r,eval=F}
+plot(obj,conf=TRUE)
+```
+This by default plots $L^{(a)}(\tau)$ for all groups.
+The option `conf=T` requests the 95\% confidence limits 
+for each $L^{(a)}(\tau)$ to be overlaid.
+To restrict to specific groups, use
+the `group=` option. 
+To override the default color of the group-specific curves,
+use the `group.col` argument to supply a $J$-vector of colors. Other graphical parameters 
+can be added and, if so, will be passed to the underlying 
+generic `plot` method.
+
+## AN EXAMPLE WITH THE HF-ACTION TRIAL
+
+### Data description
+The Heart Failure: A Controlled Trial Investigating Outcomes of Exercise Training (HF-ACTION) study was conducted between 2003--2007 to investigate whether
+ adding exercise training to the usual care of heart failure patients improves their cardiovascular outcomes (O'Conner et al., 2009). 
+ We focus on a high-risk subgroup consisting of 741 nonischemic patients with 
+baseline cardiopulmonary test duration less than or equal to 12 minutes
+and analyze recurrent hospitalizations as well as overall survival.
+
+Among the 741 patients, 364 were assigned to participate in exercise training sessions in addition to receiving usual care, and the remaining 377 received usual care alone as control. Over a median follow-up of 2.5 years, 49 (13.5\%) patients died in the exercise training arm, with an average of 1.8 hospitalizations per patient; 75 (19.9\%) patients died in the usual care arm, with an average of 2.0 hospitalizations per patient.
+While patients undergoing exercise training experience only moderately
+fewer hospitalizations in the course of follow-up, they are also much less likely to die than those in the control group. The differential survivorship needs to be taken into account when assessing the treatment effect on hospitalization. 
+
+The associated dataset `hfaction_cpx12` is contained in the `WA` package and can be
+loaded by
+```{r setup}
+library(WA)
+head(hfaction_cpx12)
+```
+The dataset is already in a format suitable for `LRfit()` (`status`= 1 for hospitalization and = 2 for death).
+The `time` variable is in units of years and `trt=0` for usual care (control)
+and `1` for exercise training.
+
+### Graphical analysis
+First, consider the unweighted while-alive hospitalization rate.
+```{r}
+dat<-hfaction_cpx12
+obj<-LRfit(dat$id,dat$time,dat$status,dat$trt)
+## print some descriptive information 
+obj
+```
+Let's plot the estimated group-specific survival-completed cumulative frequency.
+```{r,fig.align='center',fig.width=7.2,fig.height=4.5}
+plot(obj,conf=T,xlab="Time (years)",xlim=c(0, 3.5),ylim=c(0,3))
+```
+This pretty much reproduces the second panel in Figure 3 of Mao (2022).
+We can see that the curve in the exercise training arm is substantially 
+lower than that in the usual care arm, with only slightly overlapping 95\% confidence
+intervals at $\tau=3.5$ years. This bodes well for the statistical significance
+of treatment effect on the while-alive
+hospitalization rate (recall that $l^{(a)}(\tau)=L^{(a)}(\tau)/\tau$).
+
+### Estimation and inference
+Formal analysis results at $\tau=3.5$ years can be obtained through
+```{r}
+## summarize the inference results at tau=3.5 years
+summary(obj,tau=3.5,joint.test=T)
+```
+Besides the function call, the first part of the output is about
+the log-loss rate: $\log l^{(0)}(\tau)$ (Ref) and
+$\log r^{(1)}(\tau)=\log l^{(1)}(\tau)-\log l^{(0)}(\tau)$ (Group 1 vs 0).
+We can see that the two-sided $z$-test on the log-loss rate ratio generates a 
+$p$-value of 0.028, which, of course, agrees 
+with the $p$-value of the 1-df chi-square test of (4)
+since there are only two groups.
+Further below is a table for the point and interval estimates for
+the loss rate ratio: 0.830 with 95\% confidence interval
+(0.703, 0.980) --- exercise training on average reduces hospitalization
+by 1-0.830=17\% per year alive as compared to usual care by year 3.5.
+As a result of specifying `joint.test=T`, 
+we get the inference results for the RMST and the joint test of (5)
+at the end. The 2-df joint test
+gives a $p$-value of 0.007, suggesting that the (beneficial) treatment
+effect is highly significant on survival and hospitalization jointly.
+
+As supplemental analysis, we consider a weighted composite loss in (1)
+with $w_m(t)\equiv 1$ and $w_m^D(t)\equiv 2$. This is implemented by
+```{r}
+## fit the data using the weighted composite loss
+obj2<-LRfit(dat$id,dat$time,dat$status,dat$trt,Dweight=2)
+## summarize the results at tau=3.5 years
+summary(obj2,tau=3.5)
+```
+This shows a significant treatment effect on the
+weighted composite event rate ($p$-value 0.013), consistent with the conclusion
+drawn from the earlier analysis.
+
+
+## References
+* Ghosh, D. & Lin, D. Y. (2000). Nonparametric analysis of recurrent events and death. *Biometrics*, 56, 554--562.
+* Mao, L. (2022). Nonparametric inference of general while-alive estimands for recurrent event. *Submitted*.
+* Mao, L. & Lin, D. Y. (2016). Semiparametric regression for the weighted composite endpoint of recurrent and terminal events. *Biostatistics*, 172, 390--403.
+* O'Connor, C. M., Whellan, D. J., Lee, K. L., Keteyian, S. J., Cooper, L. S., Ellis, S. J., ... & Rendall, D. S. (2009). Efficacy and safety of exercise training in patients with chronic heart failure: HF-ACTION randomized controlled trial. *JAMA*, 301, 1439--1450.
+* Royston, P. & Parmar, M. K. (2011). The use of restricted mean survival time to estimate the treatment effect in randomized clinical trials when the proportional hazards assumption is in doubt. *Statistics in Medicine*, 30, 2409--2421.
+
+* Schmidli, H., Roger, J. H. & Akacha, M. (2021). Estimands for recurrent event endpoints in the presence of a terminal event. 
+*Statistics in Biopharmaceutical Research*, 10.1080/19466315.2021.1895883.
+
+* Wei, J., Mutze, T., Jahn-Eimermacher, A., Roger, J. & Recurrent Event Qualification Opinion Consortium. (2021). Properties of two while-alive estimands for recurrent events and their potential estimators. *Statistics in Biopharmaceutical Research*, 10.1080/19466315.2021.1994457.
+
